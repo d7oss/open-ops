@@ -1,0 +1,32 @@
+name: pull-request
+on:
+  workflow_call:
+    inputs:
+      pull_request_description:
+        type: string
+        required: true
+      var_name:
+        type: string
+        required: true
+      default:
+        type: string
+        required: false
+    outputs:
+      value:
+        description: The extracted value of the variable.
+        value: ${{ jobs.read_var.outputs.value || inputs.default }}
+
+jobs:
+  read_var:
+    runs-on: ubuntu-latest
+    outputs:
+      value: ${{ steps.reader.outputs.value }}
+    steps:
+      - name: Read the variable value from the PR description
+        id: reader
+        run: |
+          echo "::set-output name=value::$(echo '${{ inputs.pull_request_description }}' | {
+            sed -nre "s/^${{ inputs.var_name }}:[[:blank:]]*([^$]+)/\1/p"
+          })"
+      - name: Confirm the acquired value
+        run: echo "${{ inputs.var_name }} = ${{ steps.reader.outputs.value || inputs.default }}"
