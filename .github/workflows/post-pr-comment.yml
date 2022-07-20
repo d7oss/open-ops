@@ -1,0 +1,31 @@
+name: pull-request
+on:
+  workflow_call:
+    inputs:
+      repository_owner:
+        type: string
+        required: true
+      repository_name:
+        type: string
+        required: true
+      pull_request_number:
+        type: string
+        required: true
+      text:
+        type: string
+        required: true
+jobs:
+  post_comment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post comment to pull request
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: '${{ inputs.pull_request_number }}',
+              owner: '${{ inputs.repository_owner }}',
+              repo: '${{ inputs.repository_name }}',
+              body: ${{ toJSON(inputs.text) }},
+            })
