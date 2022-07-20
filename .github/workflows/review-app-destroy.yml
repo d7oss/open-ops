@@ -1,0 +1,60 @@
+name: review-app
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+on:
+  workflow_call:
+    inputs:
+      aws_region:
+        type: string
+        required: true
+      tf_directory:
+        type: string
+        required: true
+      tfstate_s3_bucket:
+        type: string
+        required: true
+      ecr_repository_name:
+        type: string
+        required: true
+      docker_tag:
+        type: string
+        required: true
+      extra_environment_variables:
+        type: string
+        required: false
+    secrets:
+      aws_access_key_id:
+        required: true
+      aws_secret_access_key:
+        required: true
+      tfc_token:
+        required: true
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    env:
+      TF_BUCKET: ${{ inputs.tfstate_s3_bucket }}
+      TF_STATE: ${{ github.repository }}/${{ inputs.docker_tag }}.tfstate
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.aws_access_key_id }}
+          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
+          aws-region: ${{ inputs.aws_region }}
+      - name: Authenticate to Terraform Cloud
+        run: echo 'credentials "app.terraform.io" { token = "${{ secrets.tfc_token }}" }' > .terraformrc
+      - name: Set extra environment variables
+        if: inputs.extra_environment_variables
+        run: echo "${{ inputs.extra_environment_variables }}" >> $GITHUB_ENV
+      - name: Initialize Terraform workspace
+        run: terraform init -backend-config="bucket=${TF_BUCKET}" -backend-config="key=${TF_STATE}"
+        working-directory: ${{ inputs.tf_directory }}
+      - name: Destroy components from Terraform configuration
+        run: terraform apply -auto-approve -destroy
+        working-directory: ${{ inputs.tf_directory }}
+      - name: Delete unused Terraform state from S3
+        run: aws s3 rm s3://${TF_BUCKET}/${TF_STATE}
+      - name: Delete unused Docker image from ECR
+        run: aws ecr batch-delete-image --repository-name ${{ inputs.ecr_repository_name }} --image-ids imageTag=${{ inputs.docker_tag }}

@@ -1,0 +1,102 @@
+name: review-app
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+on:
+  workflow_call:
+    inputs:
+      aws_region:
+        type: string
+        required: true
+      tf_directory:
+        type: string
+        required: true
+      tfstate_s3_bucket:
+        type: string
+        required: true
+      ecr_repository_name:
+        type: string
+        required: true
+      ecs_cluster_name:
+        type: string
+        required: true
+      ecs_service_name:
+        type: string
+        required: true
+      docker_tag:
+        type: string
+        required: true
+      hostname:
+        type: string
+        required: true
+      extra_environment_variables:
+        type: string
+        required: false
+    secrets:
+      aws_access_key_id:
+        required: true
+      aws_secret_access_key:
+        required: true
+      tfc_token:
+        required: true
+
+jobs:
+  build_push:  # Build the Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.aws_access_key_id }}
+          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
+          aws-region: ${{ inputs.aws_region }}
+      - name: Login to Amazon ECR
+        id: login_ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      - uses: actions/checkout@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build and push the Docker image to AWS ECR
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.login_ecr.outputs.registry }}/${{ inputs.ecr_repository_name }}:${{ inputs.docker_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+  create_update:
+    needs: build_push
+    runs-on: ubuntu-latest
+    env:
+      TF_BUCKET: ${{ inputs.tfstate_s3_bucket }}
+      TF_STATE: ${{ github.repository }}/${{ inputs.docker_tag }}.tfstate
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.aws_access_key_id }}
+          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
+          aws-region: ${{ inputs.aws_region }}
+      - name: Check if environment already exists
+        run: |
+          services=$(aws ecs list-services --cluster ${{ inputs.ecs_cluster_name }})
+          echo "ENV_EXISTS=$(echo $services | grep ${{ inputs.ecs_service_name }} | wc -l)" >> $GITHUB_ENV
+      - name: Authenticate to Terraform Cloud
+        run: echo 'credentials "app.terraform.io" { token = "${{ secrets.tfc_token }}" }' > .terraformrc
+      - name: Set extra environment variables
+        if: inputs.extra_environment_variables
+        run: echo "${{ inputs.extra_environment_variables }}" >> $GITHUB_ENV
+      - name: Initialize Terraform workspace
+        run: terraform init -backend-config="bucket=${TF_BUCKET}" -backend-config="key=${TF_STATE}"
+        working-directory: ${{ inputs.tf_directory }}
+      - name: Apply Terraform configuration
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_application_name: ${{ inputs.ecs_service_name }}
+          TF_VAR_hostname: ${{ inputs.hostname }}
+          # Other variables may be included by extra_environment_variables
+        working-directory: ${{ inputs.tf_directory }}
+      - name: Restart ECS service with updated Docker image
+        if: env.ENV_EXISTS == 1
+        run: echo aws ecs update-service --cluster ${{ inputs.ecs_cluster_name }} --service ${{ inputs.ecs_service_name }} --force-new-deployment
