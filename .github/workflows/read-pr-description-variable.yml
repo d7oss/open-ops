@@ -30,6 +30,8 @@ jobs:
           __PR_BODY__
           echo "::set-output name=value::$(echo "${PR_BODY}" | {
             sed -nre "s/^${{ inputs.var_name }}:[[:blank:]]*([^[:blank:]]+).*$/\1/p"
+          } | {
+            head -n1
           })"
       - name: Confirm the acquired value
         run: echo "${{ inputs.var_name }} = ${{ steps.reader.outputs.value || inputs.default }}"
