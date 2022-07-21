@@ -99,4 +99,4 @@ jobs:
         working-directory: ${{ inputs.tf_directory }}
       - name: Restart ECS service with updated Docker image
         if: env.ENV_EXISTS == 1
-        run: echo aws ecs update-service --cluster ${{ inputs.ecs_cluster_name }} --service ${{ inputs.ecs_service_name }} --force-new-deployment
+        run: aws ecs update-service --cluster ${{ inputs.ecs_cluster_name }} --service ${{ inputs.ecs_service_name }} --force-new-deployment
