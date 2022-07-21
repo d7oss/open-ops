@@ -25,7 +25,10 @@ jobs:
       - name: Read the variable value from the PR description
         id: reader
         run: |
-          echo "::set-output name=value::$(echo '${{ inputs.pull_request_description }}' | {
+          read -r -d '' PR_BODY <<'__PR_BODY__'
+          ${{ inputs.pull_request_description }}
+          __PR_BODY__
+          echo "::set-output name=value::$(echo "${PR_BODY}" | {
             sed -nre "s/^${{ inputs.var_name }}:[[:blank:]]*([^$]+)/\1/p"
           })"
       - name: Confirm the acquired value
