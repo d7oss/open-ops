@@ -1,0 +1,59 @@
+name: deploy-ecs
+
+on:
+  workflow_call:
+    inputs:
+      aws_region:
+        type: string
+        required: true
+      environment:
+        type: string
+        required: true
+      ecs_cluster_name:
+        type: string
+        required: true
+      ecs_services:
+        type: string
+        required: true
+      pre_script:
+        type: string
+        required: false
+      post_script:
+        type: string
+        required: false
+    secrets:
+      aws_access_key_id:
+        required: true
+      aws_secret_access_key:
+        required: true
+
+jobs:
+
+  update-ecs-services:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.aws_access_key_id }}
+          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
+          aws-region: ${{ inputs.aws_region }}
+      - name: Run pre-deploy script
+        if: inputs.pre_script
+        run: ${{ inputs.pre_script }}
+      - name: Deploy to ${{ inputs.environment }}
+        run: |
+          for service in $(echo "${{ inputs.ecs_services }}" | xargs); do
+            echo "::group::Trigger deployment for ${service}"
+            aws ecs update-service --cluster ${{ inputs.ecs_cluster_name }} --service ${service} --force-new-deployment
+            echo "::endgroup::"
+          done
+      - name: Wait for successful deploy
+        run: |
+          for service in $(echo "${{ inputs.ecs_services }}" | xargs); do
+            aws ecs wait services-stable --cluster ${{ inputs.ecs_cluster_name }} --services ${service}
+          done
+      - name: Run post-deploy script
+        if: inputs.post_script
+        run: ${{ inputs.post_script }}
