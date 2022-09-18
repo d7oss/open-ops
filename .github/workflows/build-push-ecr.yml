@@ -26,9 +26,6 @@ jobs:
 
   build-push:
     runs-on: ubuntu-latest
-    env:
-      DOCKER_IMAGE: ${{ inputs.docker_image }}
-      DOCKER_TAG: ${{ inputs.docker_tag }}
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
