@@ -8,6 +8,9 @@ on:
       aws_region:
         type: string
         required: true
+      tf_version:
+        type: string
+        default: 1.2.0
       tf_directory:
         type: string
         required: true
@@ -72,6 +75,10 @@ jobs:
       TF_STATE: ${{ github.repository }}/${{ inputs.docker_tag }}.tfstate
     steps:
       - uses: actions/checkout@v3
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ inputs.tf_version }}
+          cli_config_credentials_token: ${{ secrets.tfc_token }}
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -82,8 +89,6 @@ jobs:
         run: |
           services=$(aws ecs list-services --cluster ${{ inputs.ecs_cluster_name }})
           echo "ENV_EXISTS=$(echo $services | grep ${{ inputs.ecs_service_name }} | wc -l)" >> $GITHUB_ENV
-      - name: Authenticate to Terraform Cloud
-        run: echo 'credentials "app.terraform.io" { token = "${{ secrets.tfc_token }}" }' > .terraformrc
       - name: Set extra environment variables
         if: inputs.extra_environment_variables
         run: echo "${{ inputs.extra_environment_variables }}" >> $GITHUB_ENV
