@@ -1,0 +1,63 @@
+name: deploy-s3
+
+on:
+  workflow_call:
+    inputs:
+      dockerfile:
+        description: The path to the Dockerfile relative to the repository.
+        type: string
+        required: false
+      build_args:
+        description: Optional Docker build args. E.g. arg1='value'
+        type: string
+        required: false
+      aws_region:
+        type: string
+        required: true
+      s3_path:
+        description: The S3 path to sync files to. E.g. s3://my-bucket/website/
+        type: string
+        required: true
+      build_output_path:
+        description: The path to the directory containing the built static files in the Docker image.
+        type: string
+        required: true
+    secrets:
+      aws_access_key_id:
+        required: true
+      aws_secret_access_key:
+        required: true
+
+jobs:
+
+  build-sync:
+    runs-on: ubuntu-latest
+    env:
+      docker_image: local/app-image:latest
+      artifacts_path: ./app
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build the Docker image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ${{ inputs.dockerfile }}
+          build-args: ${{ inputs.build_args }}
+          tags: ${{ env.docker_image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true  # Load image for local use
+      - name: Load the application artifacts
+        run: |
+          cid=$(docker run --detach ${{ env.docker_image }})
+          docker cp ${cid}:${{ inputs.build_output_path }} ${{ env.artifacts_path }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.aws_access_key_id }}
+          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
+          aws-region: ${{ inputs.aws_region }}
+      - name: Upload to S3
+        run: aws s3 sync --delete ${{ env.artifacts_path }} ${{ inputs.s3_path }}
