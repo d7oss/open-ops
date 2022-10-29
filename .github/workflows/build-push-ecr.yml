@@ -46,5 +46,5 @@ jobs:
           push: true
           file: ${{ inputs.dockerfile }}
           tags: ${{ steps.login_ecr.outputs.registry }}/${{ inputs.ecr_repository_name }}:${{ inputs.docker_tag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ inputs.docker_tag }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.docker_tag }}

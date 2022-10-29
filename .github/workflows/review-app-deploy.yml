@@ -65,8 +65,8 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.login_ecr.outputs.registry }}/${{ inputs.ecr_repository_name }}:${{ inputs.docker_tag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ github.event.repository.default_branch }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.docker_tag }}
   create_update:
     needs: build_push
     runs-on: ubuntu-latest
