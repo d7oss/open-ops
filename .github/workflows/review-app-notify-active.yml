@@ -1,0 +1,89 @@
+name: review-app
+on:
+  workflow_call:
+    inputs:
+      aws_region:
+        type: string
+        required: true
+      ecs_cluster_name:
+        type: string
+        required: true
+      ecs_service_prefix:
+        type: string
+        required: true
+      slack_channel_id:
+        type: string
+        required: true
+    secrets:
+      gh_token:
+        required: true
+      slack_api_token:
+        required: true
+      aws_access_key_id:
+        required: true
+      aws_secret_access_key:
+        required: true
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{secrets.gh_token}}
+    outputs:
+      open_pr_numbers: ${{steps.notify.outputs.open_pr_numbers}}
+      closed_pr_numbers: ${{steps.notify.outputs.closed_pr_numbers}}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{secrets.aws_access_key_id}}
+          aws-secret-access-key: ${{secrets.aws_secret_access_key}}
+          aws-region: ${{inputs.aws_region}}
+      - name: Notify and clean unused QA envs
+        id: notify
+        run: |
+          echo "::group::Fetching active ECS services..."
+          service_arns=$(aws ecs list-services --cluster=${{inputs.ecs_cluster_name}} --query='serviceArns[?contains(@, `${{inputs.ecs_service_prefix}}`)].{_: @}' --output=text)
+          echo "Active ECS services:"
+          echo "${service_arns}"
+          echo "::endgroup::"
+
+          echo "::group::Collecting QA envs to destroy..."
+          touch message
+          touch open_pr_numbers
+          touch closed_pr_numbers
+          echo '*Active QA envs (${{inputs.ecs_service_prefix}}):*' >> message  # Collect a summary
+          for arn in ${service_arns}; do
+            # Gather information about the pull request
+            env_name=$(echo "${arn}" | grep -Eo '[^/]+$')
+            pr_number=$(echo "${arn}" | grep -Eo '[0-9]+$')
+            pr=$(gh api /repos/${{github.repository}}/pulls/${pr_number})
+            pr_state=$(echo ${pr} | jq -r .state)
+
+            # Compose message
+            echo -n "- \`${env_name}\`: <https://github.com/${{github.repository}}/pull/${pr_number}|pull request> " >> message
+            if [ "${pr_state}" = "open" ]; then
+              echo "still open." >> message
+              echo ${pr_number} >> open_pr_numbers
+            else
+              echo "closed, QA env will be destroyed." >> message
+              echo ${pr_number} >> closed_pr_numbers
+            fi
+          done
+          echo "::endgroup::"
+
+          # Save PR numbers for later
+          echo "open_pr_numbers=$(cat open_pr_numbers | jq -cnR '[inputs]')" >> $GITHUB_OUTPUT
+          echo "closed_pr_numbers=$(cat closed_pr_numbers | jq -cnR '[inputs]')" >> $GITHUB_OUTPUT
+
+          echo "::group::Sending out notifications..."
+          cat message
+          cat message >> $GITHUB_STEP_SUMMARY
+          curl -XPOST https://slack.com/api/chat.postMessage \
+            -H"Content-Type: application/json" \
+            -H"Authorization: Bearer ${{secrets.slack_api_token}}" \
+            -d "$(jq -cn \
+              --arg channel ${{inputs.slack_channel_id}} \
+              --arg text "$(cat message)" \
+              '{"channel": $channel, "text": $text}'
+            )"
+          echo "::endgroup::"
