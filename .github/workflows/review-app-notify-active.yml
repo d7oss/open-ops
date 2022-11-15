@@ -42,7 +42,12 @@ jobs:
         id: notify
         run: |
           echo "::group::Fetching active ECS services..."
-          service_arns=$(aws ecs list-services --cluster=${{inputs.ecs_cluster_name}} --query='serviceArns[?contains(@, `${{inputs.ecs_service_prefix}}`)].{_: @}' --output=text)
+          service_arns=$(aws ecs list-services \
+            --cluster=${{inputs.ecs_cluster_name}} \
+            --query='serviceArns[?contains(@, `${{inputs.ecs_service_prefix}}`)].{_: @}' \
+            --output=text \
+            | sort -r
+          )
           echo "Active ECS services:"
           echo "${service_arns}"
           echo "::endgroup::"
