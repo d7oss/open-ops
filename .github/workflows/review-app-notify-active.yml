@@ -47,7 +47,7 @@ jobs:
           echo "${service_arns}"
           echo "::endgroup::"
 
-          echo "::group::Collecting QA envs to destroy..."
+          echo "::group::Collecting QA envs..."
           touch message
           touch open_pr_numbers
           touch closed_pr_numbers
@@ -60,9 +60,17 @@ jobs:
             pr_state=$(echo ${pr} | jq -r .state)
 
             # Compose message
-            echo -n "- \`${env_name}\`: <https://github.com/${{github.repository}}/pull/${pr_number}|pull request> " >> message
+            echo -n "- \`${env_name}\`: " >> message  # Env name
+            echo -n "<$(echo ${pr} | jq -r .html_url)|PR> " >> message  # URL
+            echo -n "by <$(echo ${pr} | jq -r .user.html_url)|$(echo ${pr} | jq -r .user.login)> " >> message  # Author
             if [ "${pr_state}" = "open" ]; then
-              echo "still open." >> message
+              pr_created_at=$(date +%s -d $(echo ${pr} | jq -r .created_at))
+              pr_created_days_ago=$(( ($(date +%s) - ${pr_created_at}) / (60*60*24) ))
+              case ${pr_created_days_ago} in
+                0) echo "created less than a day ago." >> message ;;
+                1) echo "created yesterday." >> message ;;
+                *) echo "created ${pr_created_days_ago} days ago." >> message ;;
+              esac
               echo ${pr_number} >> open_pr_numbers
             else
               echo "closed, QA env will be destroyed." >> message
