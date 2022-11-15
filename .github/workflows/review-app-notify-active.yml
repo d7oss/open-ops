@@ -24,7 +24,7 @@ on:
       aws_secret_access_key:
         required: true
 jobs:
-  notify:
+  notify-slack:
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{secrets.gh_token}}
