@@ -23,6 +23,13 @@ on:
         required: true
       aws_secret_access_key:
         required: true
+    outputs:
+      open_pr_numbers:
+        description: Open pull requests with active review app.
+        value: ${{ jobs.notify-slack.outputs.open_pr_numbers }}
+      closed_pr_numbers:
+        description: Closed pull requests with active review app.
+        value: ${{ jobs.notify-slack.outputs.closed_pr_numbers }}
 jobs:
   notify-slack:
     runs-on: ubuntu-latest
