@@ -19,7 +19,10 @@ on:
         required: true
       ecr_repository_name:
         type: string
-        required: true
+        required: false
+      images:
+        type: string
+        required: false
       ecs_cluster_name:
         type: string
         required: true
@@ -44,8 +47,32 @@ on:
         required: true
 
 jobs:
+  read_images_to_build:
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.parse.outputs.images }}
+    env:
+      images: ${{ inputs.images }}  # Default value
+    steps:
+      - name: Parse images to JSON
+        id: parse
+        run: |
+          echo ::group::Read images to build from legacy ecr_repository_name parameter
+          echo "${{ inputs.images }}" >> images  # Default, new value
+          if [[ -n "${{ inputs.ecr_repository_name }}" ]]; then
+            echo "${{ inputs.ecr_repository_name }}: ./Dockerfile" >> images
+          fi
+          echo ::endgroup::
+
+          images_json=$(cat images | jq -Rnc '[[inputs][] | capture("^(?<ecr_repository_name>[^:]+):\\s*(?<dockerfile>[^$]*)$")]')
+          echo "images=${images_json}" >> $GITHUB_OUTPUT
+          jq <<< ${images_json}  # Debug
   build_push:  # Build the Docker image
     runs-on: ubuntu-latest
+    needs: read_images_to_build
+    strategy:
+      matrix:
+        image: ${{ fromJSON(needs.read_images_to_build.outputs.images) }}
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -64,8 +91,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ steps.login_ecr.outputs.registry }}/${{ inputs.ecr_repository_name }}:${{ inputs.docker_tag }}
-          cache-from: type=gha,scope=${{ github.event.repository.default_branch }}--${{ inputs.ecr_repository_name }}
+          file: ${{ matrix.image.dockerfile }}
+          tags: ${{ steps.login_ecr.outputs.registry }}/${{ matrix.image.ecr_repository_name }}:${{ inputs.docker_tag }}
+          cache-from: type=gha,scope=${{ github.event.repository.default_branch }}--${{ matrix.image.ecr_repository_name }}
           cache-to: type=gha,mode=max,scope=${{ inputs.docker_tag }}
   create_update:
     needs: build_push
