@@ -41,6 +41,7 @@ jobs:
           aws-region: ${{ inputs.aws_region }}
       - name: Run pre-deploy script
         if: inputs.pre_script
+        shell: 'script -q -e -c "bash {0}"'  # Fake TTY
         run: ${{ inputs.pre_script }}
       - name: Deploy to ${{ inputs.environment }}
         run: |
@@ -56,4 +57,5 @@ jobs:
           done
       - name: Run post-deploy script
         if: inputs.post_script
+        shell: 'script -q -e -c "bash {0}"'  # Fake TTY
         run: ${{ inputs.post_script }}
