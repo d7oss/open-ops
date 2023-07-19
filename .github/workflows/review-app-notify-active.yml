@@ -45,7 +45,7 @@ jobs:
           aws-access-key-id: ${{secrets.aws_access_key_id}}
           aws-secret-access-key: ${{secrets.aws_secret_access_key}}
           aws-region: ${{inputs.aws_region}}
-      - name: Notify and clean unused QA envs
+      - name: Notify about unused QA envs
         id: notify
         run: |
           echo "::group::Fetching active ECS services..."
