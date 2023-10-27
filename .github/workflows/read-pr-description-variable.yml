@@ -28,10 +28,10 @@ jobs:
           read -r -d '' PR_BODY << '__PR_BODY__' || :
           ${{ inputs.pull_request_description }}
           __PR_BODY__
-          echo "::set-output name=value::$(echo "${PR_BODY}" | {
+          echo "value=$(echo "${PR_BODY}" | {
             sed -nre "s/^${{ inputs.var_name }}:[[:blank:]]*([^[:blank:]]+).*$/\1/p"
           } | {
             head -n1
-          })"
+          })" >> $GITHUB_OUTPUT
       - name: Confirm the acquired value
         run: echo "${{ inputs.var_name }} = ${{ steps.reader.outputs.value || inputs.default }}"
