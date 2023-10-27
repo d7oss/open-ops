@@ -75,19 +75,19 @@ jobs:
         image: ${{ fromJSON(needs.read_images_to_build.outputs.images) }}
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.aws_access_key_id }}
           aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
           aws-region: ${{ inputs.aws_region }}
       - name: Login to Amazon ECR
         id: login_ecr
-        uses: aws-actions/amazon-ecr-login@v1
-      - uses: actions/checkout@v3
+        uses: aws-actions/amazon-ecr-login@v2
+      - uses: actions/checkout@v4
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Build and push the Docker image to AWS ECR
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true
@@ -102,13 +102,13 @@ jobs:
       TF_BUCKET: ${{ inputs.tfstate_s3_bucket }}
       TF_STATE: ${{ github.repository }}/${{ inputs.docker_tag }}.tfstate
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: ${{ inputs.tf_version }}
           cli_config_credentials_token: ${{ secrets.tfc_token }}
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.aws_access_key_id }}
           aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
