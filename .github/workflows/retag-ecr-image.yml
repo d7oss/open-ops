@@ -1,0 +1,41 @@
+name: retag-ecr-image
+# https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-retag.html
+
+on:
+  workflow_call:
+    inputs:
+      aws_region:
+        type: string
+        required: true
+      repository_name:
+        type: string
+        required: true
+      from_tag:
+        type: string
+        required: true
+      to_tag:
+        type: string
+        required: true
+    secrets:
+      aws_access_key_id:
+        required: true
+      aws_secret_access_key:
+        required: true
+
+jobs:
+  copy-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.aws_access_key_id }}
+          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
+          aws-region: ${{ inputs.aws_region }}
+      - name: Download the Docker image manifest of the source image
+        run: |
+          MANIFEST=$(aws ecr batch-get-image --repository-name ${{ inputs.repository_name }} --image-ids imageTag=${{ inputs.from_tag }} --output text --query 'images[].imageManifest')
+          echo "$MANIFEST" > manifest.json
+      - name: Push the image manifest to the target tag
+        run: |
+          aws ecr put-image --repository-name ${{ inputs.repository_name }} --image-tag ${{ inputs.to_tag }} --image-manifest "$(cat manifest.json)"
