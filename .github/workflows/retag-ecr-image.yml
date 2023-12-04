@@ -36,6 +36,9 @@ jobs:
         run: |
           MANIFEST=$(aws ecr batch-get-image --repository-name ${{ inputs.repository_name }} --image-ids imageTag=${{ inputs.from_tag }} --output text --query 'images[].imageManifest')
           echo "$MANIFEST" > manifest.json
+      - name: Clear the target tag
+        run: |
+          aws ecr batch-delete-image --repository-name ${{ inputs.repository_name }} --image-ids imageTag=${{ inputs.to_tag }}
       - name: Push the image manifest to the target tag
         run: |
           aws ecr put-image --repository-name ${{ inputs.repository_name }} --image-tag ${{ inputs.to_tag }} --image-manifest "$(cat manifest.json)"
