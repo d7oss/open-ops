@@ -16,6 +16,10 @@ on:
       docker_tag:
         type: string
         required: true
+      build_args:
+        type: string
+        required: false
+        default: ""
     secrets:
       aws_access_key_id:
         required: true
@@ -46,5 +50,6 @@ jobs:
           push: true
           file: ${{ inputs.dockerfile }}
           tags: ${{ steps.login_ecr.outputs.registry }}/${{ inputs.ecr_repository_name }}:${{ inputs.docker_tag }}
+          build-args: ${{ inputs.build_args }}
           cache-from: type=gha,scope=${{ inputs.docker_tag }}--${{ inputs.ecr_repository_name }}
           cache-to: type=gha,mode=max,scope=${{ inputs.docker_tag }}--${{ inputs.ecr_repository_name }}
