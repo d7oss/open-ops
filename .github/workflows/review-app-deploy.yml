@@ -8,19 +8,10 @@ on:
       aws_region:
         type: string
         required: true
-      tf_version:
-        type: string
-        default: 1.2.0
-      tf_directory:
-        type: string
-        required: true
-      tfstate_s3_bucket:
+      docker_tag:
         type: string
         required: true
       ecr_repository_name:
-        type: string
-        required: false
-      images:
         type: string
         required: false
       ecs_cluster_name:
@@ -29,15 +20,24 @@ on:
       ecs_service_name:
         type: string
         required: true
-      docker_tag:
-        type: string
-        required: true
-      hostname:
-        type: string
-        required: true
       extra_environment_variables:
         type: string
         required: false
+      images:
+        type: string
+        required: false
+      qa_env_name:
+        type: string
+        required: true
+      tf_directory:
+        type: string
+        required: true
+      tf_version:
+        type: string
+        default: 1.6.0
+      tfstate_s3_bucket:
+        type: string
+        required: true
     secrets:
       aws_access_key_id:
         required: true
@@ -83,7 +83,8 @@ jobs:
       - name: Login to Amazon ECR
         id: login_ecr
         uses: aws-actions/amazon-ecr-login@v2
-      - uses: actions/checkout@v4
+      - name: Fetch the source code
+        uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build and push the Docker image to AWS ECR
@@ -99,11 +100,14 @@ jobs:
     needs: build_push
     runs-on: ubuntu-latest
     env:
+      ENV_EXISTS: 0  # May be overriden later on
       TF_BUCKET: ${{ inputs.tfstate_s3_bucket }}
       TF_STATE: ${{ github.repository }}/${{ inputs.docker_tag }}.tfstate
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v2
+      - name: Fetch the source code
+        uses: actions/checkout@v4
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.tf_version }}
           cli_config_credentials_token: ${{ secrets.tfc_token }}
@@ -113,7 +117,7 @@ jobs:
           aws-access-key-id: ${{ secrets.aws_access_key_id }}
           aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
           aws-region: ${{ inputs.aws_region }}
-      - name: Check if environment already exists
+      - name: Check if ECS service already exists
         run: |
           services=$(aws ecs list-services --cluster ${{ inputs.ecs_cluster_name }})
           echo "ENV_EXISTS=$(echo $services | grep ${{ inputs.ecs_service_name }} | wc -l)" >> $GITHUB_ENV
@@ -121,15 +125,14 @@ jobs:
         if: inputs.extra_environment_variables
         run: echo "${{ inputs.extra_environment_variables }}" >> $GITHUB_ENV
       - name: Initialize Terraform workspace
-        run: terraform init -backend-config="bucket=${TF_BUCKET}" -backend-config="key=${TF_STATE}"
+        run: terraform init -backend-config="bucket=${{ env.TF_BUCKET }}" -backend-config="key=${{env.TF_STATE}}"
         working-directory: ${{ inputs.tf_directory }}
       - name: Apply Terraform configuration
         run: terraform apply -auto-approve
         env:
-          TF_VAR_application_name: ${{ inputs.ecs_service_name }}
-          TF_VAR_hostname: ${{ inputs.hostname }}
-          # Other variables may be included by extra_environment_variables
+          TF_VAR_qa_env_name: ${{ inputs.qa_env_name }}
+          # NOTE: Other variables may be included by extra_environment_variables
         working-directory: ${{ inputs.tf_directory }}
-      - name: Restart ECS service with updated Docker image
+      - name: Restart ECS service (if already existed)
         if: env.ENV_EXISTS == 1
         run: aws ecs update-service --cluster ${{ inputs.ecs_cluster_name }} --service ${{ inputs.ecs_service_name }} --force-new-deployment
