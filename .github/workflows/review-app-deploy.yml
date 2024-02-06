@@ -45,6 +45,10 @@ on:
         required: true
       tfc_token:
         required: true
+    outputs:
+      review_app_url:
+        description: The URL of the review app
+        value: ${{ jobs.create_update.outputs.review_app_url }}
 
 jobs:
   read_images_to_build:
@@ -103,6 +107,8 @@ jobs:
       ENV_EXISTS: 0  # May be overriden later on
       TF_BUCKET: ${{ inputs.tfstate_s3_bucket }}
       TF_STATE: ${{ github.repository }}/${{ inputs.docker_tag }}.tfstate
+    outputs:
+      review_app_url: ${{ steps.output_review_app_url.outputs.review_app_url }}
     steps:
       - name: Fetch the source code
         uses: actions/checkout@v4
@@ -136,3 +142,8 @@ jobs:
       - name: Restart ECS service (if already existed)
         if: env.ENV_EXISTS == 1
         run: aws ecs update-service --cluster ${{ inputs.ecs_cluster_name }} --service ${{ inputs.ecs_service_name }} --force-new-deployment
+      - name: Output the review app URL
+        id: output_review_app_url
+        run: |
+          url=$(terraform output -json | jq -r '.review_app_url.value')
+          echo "review_app_url=${url}" >> $GITHUB_ENV
