@@ -149,3 +149,4 @@ jobs:
         run: |
           url=$(terraform output -raw review_app_url)
           echo "review_app_url=${url}" >> $GITHUB_OUTPUT
+        working-directory: ${{ inputs.tf_directory }}
