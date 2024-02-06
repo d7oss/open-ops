@@ -142,8 +142,10 @@ jobs:
       - name: Restart ECS service (if already existed)
         if: env.ENV_EXISTS == 1
         run: aws ecs update-service --cluster ${{ inputs.ecs_cluster_name }} --service ${{ inputs.ecs_service_name }} --force-new-deployment
+      - name: Wait for ECS service to be stable
+        run: aws ecs wait services-stable --cluster ${{ inputs.ecs_cluster_name }} --services ${{ inputs.ecs_service_name }}
       - name: Output the review app URL
         id: output_review_app_url
         run: |
-          url=$(terraform output -json | jq -r '.review_app_url.value')
-          echo "review_app_url=${url}" >> $GITHUB_ENV
+          url=$(terraform output -raw review_app_url)
+          echo "review_app_url=${url}" >> $GITHUB_OUTPUT
