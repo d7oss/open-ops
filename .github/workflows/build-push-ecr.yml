@@ -20,6 +20,10 @@ on:
         type: string
         required: false
         default: ""
+      provenance:
+        type: boolean
+        required: false
+        default: true
     secrets:
       aws_access_key_id:
         required: true
@@ -53,3 +57,4 @@ jobs:
           build-args: ${{ inputs.build_args }}
           cache-from: type=gha,scope=${{ inputs.docker_tag }}--${{ inputs.ecr_repository_name }}
           cache-to: type=gha,mode=max,scope=${{ inputs.docker_tag }}--${{ inputs.ecr_repository_name }}
+          provenance: ${{ inputs.provenance }}
