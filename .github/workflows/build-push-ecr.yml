@@ -29,6 +29,8 @@ on:
         required: true
       aws_secret_access_key:
         required: true
+      build_args:
+        required: false
     outputs:
       registry:
         description: The ECR registry URL.
@@ -57,6 +59,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Normalize build args
+        id: build_args
+        shell: python
+        run: |
+          import os
+          input_build_args = '''${{ inputs.build_args }}'''.strip()
+          secret_build_args = '''${{ secrets.build_args }}'''.strip()
+          result = '\n'.join(filter(None, [input_build_args, secret_build_args]))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            print('BUILD_ARGS<<EOF', file=output)
+            print(result, file=output)
+            print('EOF', file=output)
       - name: Build the Docker image and push to ECR
         uses: docker/build-push-action@v5
         with:
@@ -64,7 +78,7 @@ jobs:
           push: true
           file: ${{ inputs.dockerfile }}
           tags: ${{ steps.login_ecr.outputs.registry }}/${{ inputs.ecr_repository_name }}:${{ inputs.docker_tag }}
-          build-args: ${{ inputs.build_args }}
+          build-args: ${{ steps.build_args.outputs.BUILD_ARGS }}
           cache-from: type=gha,scope=${{ inputs.docker_tag }}--${{ inputs.ecr_repository_name }}
           cache-to: type=gha,mode=max,scope=${{ inputs.docker_tag }}--${{ inputs.ecr_repository_name }}
           provenance: ${{ inputs.provenance }}
