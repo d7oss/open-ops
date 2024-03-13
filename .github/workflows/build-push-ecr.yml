@@ -29,11 +29,21 @@ on:
         required: true
       aws_secret_access_key:
         required: true
+    outputs:
+      registry:
+        description: The ECR registry URL.
+        value: ${{ jobs.build-push.outputs.registry }}
+      image_uri:
+        description: The image URI.
+        value: ${{ jobs.build-push.outputs.image_uri }}
 
 jobs:
 
   build-push:
     runs-on: ubuntu-latest
+    outputs:
+      registry: ${{ steps.login_ecr.outputs.registry }}
+      image_uri: ${{ steps.login_ecr.outputs.registry }}/${{ inputs.ecr_repository_name }}:${{ inputs.docker_tag }}
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
